@@ -1,0 +1,5 @@
+
+event,logic_check,effect_loyalty,effect_emotion
+家族被誣陷滅門,✓,-30,-50
+遭遇戰敗,✓,-20,-20
+與盟友結識,✓,+30,+10
