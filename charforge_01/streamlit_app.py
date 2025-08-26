@@ -95,5 +95,43 @@ with tab2:
             c1 = st.selectbox("主角A", c_options, help="第一位主角")
         with col2:
             idx_b = 1 if len(c_options) > 1 else 0
-            c2 = st.selectbox("主角B", c_options, index=idx_b, h
+            c2 = st.selectbox("主角B", c_options, index=idx_b, help="第二位主角")
+
+        col3, col4 = st.columns(2)
+        with col3:
+            e_name = st.selectbox("共同經歷", e_options, key="dual_event", help="兩人共同面對的情節")
+        with col4:
+            d_name = st.selectbox("推進發展", d_options, key="dual_dev", help="共同經歷之後的關係變化")
+
+        submitted_dual = st.form_submit_button("產生雙主角故事")
+
+    if submitted_dual:
+        # 產生故事
+        story_paras = generate_dual_story(c1, c2, e_name, d_name, characters, events, developments)
+        st.markdown("### 生成結果")
+        st.markdown("\n\n".join(story_paras))
+
+        # 觀察重點（以易讀條列呈現）
+        st.markdown("### 觀察重點")
+        notes = generate_notes("dual")
+        if isinstance(notes, dict):
+            for k, v in notes.items():
+                st.markdown(f"- **{k}**：{v}")
+        else:
+            st.write(notes)
+
+        # 情緒趨勢（示意）
+        fig = build_emotion_trend_figure(events, developments, e_name, d_name)
+        if fig is not None:
+            st.markdown("### 雙主角情緒變化（示意）")
+            st.pyplot(fig, use_container_width=True)
+            st.caption("情緒值為相對分數，用於比較共同經歷前後的變化。")
+
+    with st.expander("進階設定 / 除錯（可略過）"):
+        st.caption("可檢視基礎資料以確認下拉選項來源。")
+        st.write("事件資料（前5列）")
+        st.dataframe(events.head(), use_container_width=True)
+        st.write("發展資料（前5列）")
+        st.dataframe(developments.head(), use_container_width=True)
+
 
