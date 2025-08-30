@@ -53,8 +53,8 @@ with st.sidebar:
 
     # 預設嘗試選到慣用欄名；若沒有，就用第 0 欄
     def pick_index(df: pd.DataFrame, name: str, fallback: int = 0) -> int:
-    cols = df.columns.tolist()
-    return int(df.columns.get_indexer([name])[0]) if name in cols else int(fallback)
+        cols = df.columns.tolist()
+        return int(df.columns.get_indexer([name])[0]) if name in cols else int(fallback)
 
     char_col = st.selectbox(
         "角色名稱欄（characters.csv）",
