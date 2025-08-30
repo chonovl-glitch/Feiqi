@@ -11,12 +11,47 @@ st.set_page_config(page_title="CharForge｜故事進展模擬", page_icon="📘"
 st.title("CharForge｜故事進展模擬（方法2：GitHub + Streamlit Cloud）")
 
 # ---- 資料載入（快取） -------------------------------------------------------
+# ---- 資料載入（快取，帶多路徑檢查） -------------------
+from pathlib import Path
+
 @st.cache_data
 def load_csvs():
-    chars = pd.read_csv("data/characters.csv")
-    evts  = pd.read_csv("data/events.csv")
-    devs  = pd.read_csv("data/developments.csv")
+    """
+    嘗試在多個常見位置尋找 CSV；若找不到，顯示清楚的錯誤並停止執行。
+    支援的結構例：
+    - repo_root/data/*.csv  (建議)
+    - repo_root/charforge/data/*.csv
+    - 與 app 同層的 data/*.csv
+    """
+    base = Path(__file__).resolve().parent     # streamlit_app.py 所在資料夾
+    candidates = [
+        base / "data",
+        base.parent / "data",
+        base / "charforge" / "data",
+        base.parent / "charforge" / "data",
+    ]
+
+    data_dir = None
+    for p in candidates:
+        if (p / "characters.csv").exists() and (p / "events.csv").exists() and (p / "developments.csv").exists():
+            data_dir = p
+            break
+
+    if data_dir is None:
+        st.error(
+            " 找不到資料檔。\n\n請確認以下任一位置存在三個 CSV：\n"
+            "- ./data/{characters.csv, events.csv, developments.csv}\n"
+            "- ../data/{...}\n"
+            "- ./charforge/data/{...}\n"
+            "- ../charforge/data/{...}"
+        )
+        st.stop()
+
+    chars = pd.read_csv(data_dir / "characters.csv")
+    evts  = pd.read_csv(data_dir / "events.csv")
+    devs  = pd.read_csv(data_dir / "developments.csv")
     return chars, evts, devs
+
 
 characters, events, developments = load_csvs()
 
