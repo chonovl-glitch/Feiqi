@@ -1,4 +1,6 @@
 
+st.sidebar.success("這是 pages/3_資料維護.py")
+
 import streamlit as st
 import pandas as pd
 from pathlib import Path
