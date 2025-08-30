@@ -10,36 +10,29 @@ from src.core.visualization import build_emotion_trend_figure
 st.set_page_config(page_title="CharForge｜故事進展模擬", page_icon="📘", layout="wide")
 st.title("CharForge｜故事進展模擬（方法2：GitHub + Streamlit Cloud）")
 
-# ---- 資料載入（快取） -------------------------------------------------------
 # ---- 資料載入（快取，帶多路徑檢查） -------------------
+
 from pathlib import Path
+import pandas as pd
+import streamlit as st
 
 @st.cache_data
 def load_csvs():
-    """
-    嘗試在多個常見位置尋找 CSV；若找不到，顯示清楚的錯誤並停止執行。
-    支援的結構例：
-    - repo_root/data/*.csv  (建議)
-    - repo_root/charforge/data/*.csv
-    - 與 app 同層的 data/*.csv
-    """
-    base = Path(__file__).resolve().parent     # streamlit_app.py 所在資料夾
+    """嘗試多個常見位置尋找 CSV，找不到就明確提示並停止。"""
+    base = Path(__file__).resolve().parent  # streamlit_app.py 所在資料夾
     candidates = [
         base / "data",
         base.parent / "data",
         base / "charforge" / "data",
         base.parent / "charforge" / "data",
     ]
-
-    data_dir = None
-    for p in candidates:
-        if (p / "characters.csv").exists() and (p / "events.csv").exists() and (p / "developments.csv").exists():
-            data_dir = p
-            break
-
+    data_dir = next((p for p in candidates
+                     if (p / "characters.csv").exists()
+                     and (p / "events.csv").exists()
+                     and (p / "developments.csv").exists()), None)
     if data_dir is None:
         st.error(
-            " 找不到資料檔。\n\n請確認以下任一位置存在三個 CSV：\n"
+            " 找不到資料檔。\n請在下列任一位置放入三個 CSV：\n"
             "- ./data/{characters.csv, events.csv, developments.csv}\n"
             "- ../data/{...}\n"
             "- ./charforge/data/{...}\n"
