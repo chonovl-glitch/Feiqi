@@ -46,7 +46,6 @@ def load_csvs():
     return chars, evts, devs
 
 
-characters, events, developments = load_csvs()
 
 # ---- 側邊欄：欄位對應 & 版面選擇 -------------------------------------------
 with st.sidebar:
