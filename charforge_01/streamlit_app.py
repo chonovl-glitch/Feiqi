@@ -1,25 +1,21 @@
 import streamlit as st
 import pandas as pd
+from pathlib import Path
 
-# 你的核心模組（照原本專案結構）
+# ---- 核心模組 ---------------------------------------------------------------
 from src.core.generator import generate_single_story, generate_dual_story
 from src.core.evaluation import generate_notes
 from src.core.visualization import build_emotion_trend_figure
 
 # ---- 基本設定 ---------------------------------------------------------------
 st.set_page_config(page_title="CharForge｜故事進展模擬", page_icon="📘", layout="wide")
-st.title("CharForge｜故事進展模擬（方法2：GitHub + Streamlit Cloud）")
+st.title("CharForge｜故事進展模擬")
 
-# ---- 資料載入（快取，帶多路徑檢查） -------------------
-
-from pathlib import Path
-import pandas as pd
-import streamlit as st
-
+# ---- 資料載入（快取，帶多路徑檢查） ----------------------------------------
 @st.cache_data
 def load_csvs():
     """嘗試多個常見位置尋找 CSV，找不到就明確提示並停止。"""
-    base = Path(__file__).resolve().parent  # streamlit_app.py 所在資料夾
+    base = Path(__file__).resolve().parent  # 這支檔所在資料夾
     candidates = [
         base / "data",
         base.parent / "data",
@@ -32,7 +28,7 @@ def load_csvs():
                      and (p / "developments.csv").exists()), None)
     if data_dir is None:
         st.error(
-            " 找不到資料檔。\n請在下列任一位置放入三個 CSV：\n"
+            "找不到資料檔。\n請在下列任一位置放入三個 CSV：\n"
             "- ./data/{characters.csv, events.csv, developments.csv}\n"
             "- ../data/{...}\n"
             "- ./charforge/data/{...}\n"
@@ -45,6 +41,7 @@ def load_csvs():
     devs  = pd.read_csv(data_dir / "developments.csv")
     return chars, evts, devs
 
+# ---- 載入 ---------------------------------------------------------------
 characters, events, developments = load_csvs()
 
 # 固定欄位存在性檢查
@@ -63,32 +60,29 @@ if missing:
     st.error("找不到必要欄位：" + ", ".join(missing) + "。\n請把 CSV 欄名改成固定格式：characters[name]、events[event]、developments[development]。")
     st.stop()
 
+# ---- 數值欄位轉型（容忍 '+10' 形式） ---------------------------------------
+def _to_int_series(s: pd.Series) -> pd.Series:
+    return (
+        s.astype(str)
+        .str.strip()
+        .str.replace('+', '', regex=False)
+        .astype(int)
+    )
 
-# ---- 側邊欄：欄位對應 & 版面選擇 -------------------------------------------
+events_std = events.copy()
+if "effect_loyalty" in events_std.columns:
+    events_std["effect_loyalty"] = _to_int_series(events_std["effect_loyalty"])
+if "effect_emotion" in events_std.columns:
+    events_std["effect_emotion"] = _to_int_series(events_std["effect_emotion"])
+
+developments_std = developments.copy()
+if "stance_shift" in developments_std.columns:
+    developments_std["stance_shift"] = _to_int_series(developments_std["stance_shift"])
+if "emotion_shift" in developments_std.columns:
+    developments_std["emotion_shift"] = _to_int_series(developments_std["emotion_shift"])
+
+# ---- 側邊欄：只保留版面選擇 -------------------------------------------------
 with st.sidebar:
-    st.header("🧩 資料欄位對應")
-
-    # 預設嘗試選到慣用欄名；若沒有，就用第 0 欄
-        cols = df.columns.tolist()
-        return int(df.columns.get_indexer([name])[0]) if name in cols else int(fallback)
-
-    char_col = st.selectbox(
-        "角色名稱欄（characters.csv）",
-        characters.columns.tolist(),
-        index=pick_index(characters, "name", 0),
-    )
-    evt_col = st.selectbox(
-        "事件名稱欄（events.csv）",
-        events.columns.tolist(),
-        index=pick_index(events, "event", 0),
-    )
-    dev_col = st.selectbox(
-        "發展名稱欄（developments.csv）",
-        developments.columns.tolist(),
-        index=pick_index(developments, "development", 0),
-    )
-
-    st.divider()
     st.header("🧭 控件擺放位置")
     layout_mode = st.radio(
         "選擇版型",
@@ -96,16 +90,12 @@ with st.sidebar:
         index=1
     )
 
-# ---- 選項來源（依使用者對應的欄位） ----------------------------------------
+# ---- 選項來源（固定欄位） ---------------------------------------------------
 c_options = characters['name'].astype(str).tolist()
 e_options = events['event'].astype(str).tolist()
 d_options = developments['development'].astype(str).tolist()
 
-# 為了與既有視覺化函式介面相容（它預期有 event/development 欄）
-events_std = events.assign(event=events[evt_col])
-developments_std = developments.assign(development=developments[dev_col])
-
-# ---- 指標（概覽） -----------------------------------------------------------
+# ---- 總覽卡片 ---------------------------------------------------------------
 m1, m2, m3 = st.columns(3)
 m1.metric("角色數", len(c_options))
 m2.metric("事件數", len(e_options))
@@ -137,7 +127,7 @@ with tab1:
         d_name = right.selectbox("發展", d_options, index=0 if d_options else None, key="single_d")
         place = st
 
-    if place.button("生成單角進展"):
+    if place.button("生成單角故事"):
         results = generate_single_story(c_name, e_name, d_name, characters, events, developments)
         place.write("\n\n".join(results))
 
