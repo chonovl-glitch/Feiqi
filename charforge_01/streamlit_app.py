@@ -1,137 +1,144 @@
 import streamlit as st
 import pandas as pd
 
-# －－－ 你的既有邏輯（保持不動） －－－
-from src.data_handler.preprocessing import load_data
+# 你的核心模組（照原本專案結構）
 from src.core.generator import generate_single_story, generate_dual_story
 from src.core.evaluation import generate_notes
 from src.core.visualization import build_emotion_trend_figure
 
-# －－－ 頁面設定與抬頭 －－－
-st.set_page_config(page_title="CharForge：故事模擬器", page_icon="📘", layout="wide")
-st.title("CharForge：故事模擬器")
-st.caption("選擇角色與事件，快速產生可閱讀的故事段落與情緒變化示意。")
+# ---- 基本設定 ---------------------------------------------------------------
+st.set_page_config(page_title="CharForge｜故事進展模擬", page_icon="📘", layout="wide")
+st.title("CharForge｜故事進展模擬（方法2：GitHub + Streamlit Cloud）")
 
-# －－－ 載入資料 －－－
-try:
-    characters, events, developments = load_data()
-except Exception as e:
-    st.error("資料載入失敗，請檢查 data/*.csv 與欄位名稱。")
-    st.exception(e)
-    st.stop()
+# ---- 資料載入（快取） -------------------------------------------------------
+@st.cache_data
+def load_csvs():
+    chars = pd.read_csv("data/characters.csv")
+    evts  = pd.read_csv("data/events.csv")
+    devs  = pd.read_csv("data/developments.csv")
+    return chars, evts, devs
 
-# 基本統計
-with st.container():
-    colA, colB, colC = st.columns(3)
-    colA.metric("角色數", len(characters))
-    colB.metric("事件數", len(events))
-    colC.metric("發展數", len(developments))
+characters, events, developments = load_csvs()
 
-tab1, tab2 = st.tabs(["單角故事", "雙主角故事"])
+# ---- 側邊欄：欄位對應 & 版面選擇 -------------------------------------------
+with st.sidebar:
+    st.header("🧩 資料欄位對應")
 
-# －－－ 單角故事 －－－
+    # 預設嘗試選到慣用欄名；若沒有，就用第 0 欄
+    def pick_index(df: pd.DataFrame, name: str, fallback: int = 0) -> int:
+        cols = df.columns.tolist()
+        return df.columns.get_indexer([name])[0] if name in cols else fallback
+
+    char_col = st.selectbox(
+        "角色名稱欄（characters.csv）",
+        characters.columns.tolist(),
+        index=pick_index(characters, "name", 0),
+    )
+    evt_col = st.selectbox(
+        "事件名稱欄（events.csv）",
+        events.columns.tolist(),
+        index=pick_index(events, "event", 0),
+    )
+    dev_col = st.selectbox(
+        "發展名稱欄（developments.csv）",
+        developments.columns.tolist(),
+        index=pick_index(developments, "development", 0),
+    )
+
+    st.divider()
+    st.header("🧭 控件擺放位置")
+    layout_mode = st.radio(
+        "選擇版型",
+        ["側邊欄控件", "頂部三欄", "雙列（角色左／事件+發展右）"],
+        index=1
+    )
+
+# ---- 選項來源（依使用者對應的欄位） ----------------------------------------
+c_options = characters[char_col].astype(str).tolist()
+e_options = events[evt_col].astype(str).tolist()
+d_options = developments[dev_col].astype(str).tolist()
+
+# 為了與既有視覺化函式介面相容（它預期有 event/development 欄）
+events_std = events.assign(event=events[evt_col])
+developments_std = developments.assign(development=developments[dev_col])
+
+# ---- 指標（概覽） -----------------------------------------------------------
+m1, m2, m3 = st.columns(3)
+m1.metric("角色數", len(c_options))
+m2.metric("事件數", len(e_options))
+m3.metric("發展數", len(d_options))
+
+# ---- 兩個分頁 ---------------------------------------------------------------
+tab1, tab2 = st.tabs(["單角色進展", "雙角色交錯"])
+
+# =============== 單角色 ======================================================
 with tab1:
-    st.subheader("單角故事")
-    st.caption("選一位角色與其關鍵事件／推進發展，產生一段故事草稿。")
+    st.subheader("單角色進展")
 
-    c_options = characters["name"].tolist()
-    e_options = events["event"].tolist()
-    d_options = developments["development"].tolist()
-
-    with st.form("single_form"):
+    # 依版面模式放控件
+    if layout_mode == "側邊欄控件":
+        c_name = st.sidebar.selectbox("角色", c_options, index=0 if c_options else None, key="single_c")
+        e_name = st.sidebar.selectbox("事件", e_options, index=0 if e_options else None, key="single_e")
+        d_name = st.sidebar.selectbox("發展", d_options, index=0 if d_options else None, key="single_d")
+        place = st  # 結果放主區
+    elif layout_mode == "頂部三欄":
         col1, col2, col3 = st.columns(3)
-        with col1:
-            c_name = st.selectbox("角色", c_options, help="選擇主角")
-        with col2:
-            e_name = st.selectbox("關鍵事件", e_options, help="觸發故事的轉機或衝突")
-        with col3:
-            d_name = st.selectbox("推進發展", d_options, help="事件之後的發展節點")
+        c_name = col1.selectbox("角色", c_options, index=0 if c_options else None, key="single_c")
+        e_name = col2.selectbox("事件", e_options, index=0 if e_options else None, key="single_e")
+        d_name = col3.selectbox("發展", d_options, index=0 if d_options else None, key="single_d")
+        place = st
+    else:  # 雙列
+        left, right = st.columns([1, 2])
+        c_name = left.selectbox("角色", c_options, index=0 if c_options else None, key="single_c")
+        e_name = right.selectbox("事件", e_options, index=0 if e_options else None, key="single_e")
+        d_name = right.selectbox("發展", d_options, index=0 if d_options else None, key="single_d")
+        place = st
 
-        submitted = st.form_submit_button("產生故事")
+    if place.button("生成單角進展"):
+        results = generate_single_story(c_name, e_name, d_name, characters, events, developments)
+        place.write("\n\n".join(results))
 
-    if submitted:
-        # 產生故事
-        story_paras = generate_single_story(c_name, e_name, d_name, characters, events, developments)
-        st.markdown("### 生成結果")
-        st.markdown("\n\n".join(story_paras))
+        place.caption("🔎 自動生成的檢視要點")
+        place.json(generate_notes("single"))
 
-        # 觀察重點（以易讀條列呈現）
-        st.markdown("### 觀察重點")
-        notes = generate_notes("single")
-        if isinstance(notes, dict):
-            for k, v in notes.items():
-                st.markdown(f"- **{k}**：{v}")
-        else:
-            st.write(notes)
-
-        # 情緒趨勢（示意）
-        fig = build_emotion_trend_figure(events, developments, e_name, d_name)
+        fig = build_emotion_trend_figure(events_std, developments_std, e_name, d_name)
         if fig is not None:
-            st.markdown("### 角色情緒變化（示意）")
-            st.pyplot(fig, use_container_width=True)
-            st.caption("情緒值為相對分數，用於比較事件前後的變化。")
+            place.pyplot(fig, use_container_width=True)
 
-    with st.expander("進階設定 / 除錯（可略過）"):
-        st.caption("開發時使用的檢視工具：")
-        st.write("角色資料（前5列）")
-        st.dataframe(characters.head(), use_container_width=True)
-        st.write("事件資料（前5列）")
-        st.dataframe(events.head(), use_container_width=True)
-        st.write("發展資料（前5列）")
-        st.dataframe(developments.head(), use_container_width=True)
-
-# －－－ 雙主角故事 －－－
+# =============== 雙角色 ======================================================
 with tab2:
-    st.subheader("雙主角故事")
-    st.caption("選擇兩位主角，設定共同經歷與推進發展，產生交錯視角的故事片段。")
+    st.subheader("雙角色交錯")
 
-    c_options = characters["name"].tolist()
-    e_options = events["event"].tolist()
-    d_options = developments["development"].tolist()
+    if layout_mode == "側邊欄控件":
+        c1 = st.sidebar.selectbox("角色A", c_options, index=0 if c_options else None, key="dual_c1")
+        c2 = st.sidebar.selectbox("角色B", c_options, index=1 if len(c_options) > 1 else 0, key="dual_c2")
+        e_name = st.sidebar.selectbox("共享事件", e_options, index=0 if e_options else None, key="dual_e")
+        d_name = st.sidebar.selectbox("共享發展", d_options, index=0 if d_options else None, key="dual_d")
+        place = st
+    elif layout_mode == "頂部三欄":
+        col1, col2, col3 = st.columns(3)
+        c1 = col1.selectbox("角色A", c_options, index=0 if c_options else None, key="dual_c1")
+        c2 = col1.selectbox("角色B", c_options, index=1 if len(c_options) > 1 else 0, key="dual_c2")
+        e_name = col2.selectbox("共享事件", e_options, index=0 if e_options else None, key="dual_e")
+        d_name = col3.selectbox("共享發展", d_options, index=0 if d_options else None, key="dual_d")
+        place = st
+    else:  # 雙列
+        left, right = st.columns([1, 2])
+        c1 = left.selectbox("角色A", c_options, index=0 if c_options else None, key="dual_c1")
+        c2 = left.selectbox("角色B", c_options, index=1 if len(c_options) > 1 else 0, key="dual_c2")
+        e_name = right.selectbox("共享事件", e_options, index=0 if e_options else None, key="dual_e")
+        d_name = right.selectbox("共享發展", d_options, index=0 if d_options else None, key="dual_d")
+        place = st
 
-    with st.form("dual_form"):
-        col1, col2 = st.columns(2)
-        with col1:
-            c1 = st.selectbox("主角A", c_options, help="第一位主角")
-        with col2:
-            idx_b = 1 if len(c_options) > 1 else 0
-            c2 = st.selectbox("主角B", c_options, index=idx_b, help="第二位主角")
+    if place.button("生成雙角交錯"):
+        results = generate_dual_story(c1, c2, e_name, d_name, characters, events, developments)
+        place.write("\n\n".join(results))
 
-        col3, col4 = st.columns(2)
-        with col3:
-            e_name = st.selectbox("共同經歷", e_options, key="dual_event", help="兩人共同面對的情節")
-        with col4:
-            d_name = st.selectbox("推進發展", d_options, key="dual_dev", help="共同經歷之後的關係變化")
+        place.caption("🔎 自動生成的檢視要點")
+        place.json(generate_notes("dual"))
 
-        submitted_dual = st.form_submit_button("產生雙主角故事")
-
-    if submitted_dual:
-        # 產生故事
-        story_paras = generate_dual_story(c1, c2, e_name, d_name, characters, events, developments)
-        st.markdown("### 生成結果")
-        st.markdown("\n\n".join(story_paras))
-
-        # 觀察重點（以易讀條列呈現）
-        st.markdown("### 觀察重點")
-        notes = generate_notes("dual")
-        if isinstance(notes, dict):
-            for k, v in notes.items():
-                st.markdown(f"- **{k}**：{v}")
-        else:
-            st.write(notes)
-
-        # 情緒趨勢（示意）
-        fig = build_emotion_trend_figure(events, developments, e_name, d_name)
+        fig = build_emotion_trend_figure(events_std, developments_std, e_name, d_name)
         if fig is not None:
-            st.markdown("### 雙主角情緒變化（示意）")
-            st.pyplot(fig, use_container_width=True)
-            st.caption("情緒值為相對分數，用於比較共同經歷前後的變化。")
-
-    with st.expander("進階設定 / 除錯（可略過）"):
-        st.caption("可檢視基礎資料以確認下拉選項來源。")
-        st.write("事件資料（前5列）")
-        st.dataframe(events.head(), use_container_width=True)
-        st.write("發展資料（前5列）")
-        st.dataframe(developments.head(), use_container_width=True)
+            place.pyplot(fig, use_container_width=True)
 
 
