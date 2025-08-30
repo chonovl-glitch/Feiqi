@@ -47,12 +47,28 @@ def load_csvs():
 
 characters, events, developments = load_csvs()
 
+# 固定欄位存在性檢查
+required = {
+    'characters': ['name'],
+    'events': ['event'],
+    'developments': ['development'],
+}
+missing = []
+for label, cols in required.items():
+    df = {'characters': characters, 'events': events, 'developments': developments}[label]
+    for c in cols:
+        if c not in df.columns:
+            missing.append(f"{label}.{c}")
+if missing:
+    st.error("找不到必要欄位：" + ", ".join(missing) + "。\n請把 CSV 欄名改成固定格式：characters[name]、events[event]、developments[development]。")
+    st.stop()
+
+
 # ---- 側邊欄：欄位對應 & 版面選擇 -------------------------------------------
 with st.sidebar:
     st.header("🧩 資料欄位對應")
 
     # 預設嘗試選到慣用欄名；若沒有，就用第 0 欄
-    def pick_index(df: pd.DataFrame, name: str, fallback: int = 0) -> int:
         cols = df.columns.tolist()
         return int(df.columns.get_indexer([name])[0]) if name in cols else int(fallback)
 
@@ -81,9 +97,9 @@ with st.sidebar:
     )
 
 # ---- 選項來源（依使用者對應的欄位） ----------------------------------------
-c_options = characters[char_col].astype(str).tolist()
-e_options = events[evt_col].astype(str).tolist()
-d_options = developments[dev_col].astype(str).tolist()
+c_options = characters['name'].astype(str).tolist()
+e_options = events['event'].astype(str).tolist()
+d_options = developments['development'].astype(str).tolist()
 
 # 為了與既有視覺化函式介面相容（它預期有 event/development 欄）
 events_std = events.assign(event=events[evt_col])
@@ -167,5 +183,4 @@ with tab2:
         fig = build_emotion_trend_figure(events_std, developments_std, e_name, d_name)
         if fig is not None:
             place.pyplot(fig, use_container_width=True)
-
 
